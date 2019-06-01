@@ -1664,16 +1664,27 @@ fn deserialize_untagged_enum(
         .iter()
         .filter(|variant| !variant.attrs.skip_deserializing())
         .map(|variant| {
-            Expr(deserialize_untagged_variant(
+            let de_any = Expr(deserialize_untagged_variant(
                 params,
                 variant,
                 cattrs,
                 quote!(
                     _serde::__private::de::ContentRefDeserializer::<__D::Error>::new(&__content)
                 ),
-            ))
-        });
+            ));
 
+            let variant_name = variant.ident.to_string();
+            quote! {
+                _serde::__private::Result::map_err(
+                    #de_any,
+                    |e| -> __D::Error {
+                        _serde::de::Error::custom(
+                            ::std::format!("attempted to deserialize `{}` but failed with: {}", #variant_name, ::std::string::ToString::to_string(&e))
+                        )
+                    },
+                )
+            }
+        });
     // TODO this message could be better by saving the errors from the failed
     // attempts. The heuristic used by TOML was to count the number of fields
     // processed before an error, and use the error that happened after the
@@ -1681,21 +1692,29 @@ fn deserialize_untagged_enum(
     // better to save all the errors and combine them into one message that
     // explains why none of the variants matched.
     let fallthrough_msg = format!(
-        "data did not match any variant of untagged enum {}",
+        "data did not match any variant of untagged enum `{}`",
         params.type_name()
     );
     let fallthrough_msg = cattrs.expecting().unwrap_or(&fallthrough_msg);
+    let has_custom_err_msg = cattrs.expecting().is_some();
 
     quote_block! {
         let __content = try!(<_serde::__private::de::Content as _serde::Deserialize>::deserialize(__deserializer));
+        let mut fallthrough_msg = ::std::string::ToString::to_string(#fallthrough_msg);
 
         #(
-            if let _serde::__private::Ok(__ok) = #attempts {
-                return _serde::__private::Ok(__ok);
+            match #attempts {
+                _serde::__private::Ok(__ok) => return _serde::__private::Ok(__ok),
+                _serde::__private::Err(__err) => {
+                    if !#has_custom_err_msg {
+                        fallthrough_msg.push_str("\n\t- ");
+                        fallthrough_msg.push_str(&::std::string::ToString::to_string(&__err));
+                    }
+                }
             }
         )*
 
-        _serde::__private::Err(_serde::de::Error::custom(#fallthrough_msg))
+        _serde::__private::Err(_serde::de::Error::custom(fallthrough_msg))
     }
 }
 
