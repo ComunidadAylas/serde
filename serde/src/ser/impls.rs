@@ -184,7 +184,7 @@ where
 
 #[cfg(all(any(feature = "std", feature = "alloc"), not(no_relaxed_trait_bounds)))]
 macro_rules! seq_impl {
-    ($ty:ident < T $(: $tbound1:ident $(+ $tbound2:ident)*)* $(, $typaram:ident : $bound:ident)* >) => {
+    ($ty:ident <T $(: $tbound1:ident $(+ $tbound2:ident)*)* $(, $typaram:ident : $bound:ident)*>) => {
         impl<T $(, $typaram)*> Serialize for $ty<T $(, $typaram)*>
         where
             T: Serialize,
@@ -202,7 +202,7 @@ macro_rules! seq_impl {
 
 #[cfg(all(any(feature = "std", feature = "alloc"), no_relaxed_trait_bounds))]
 macro_rules! seq_impl {
-    ($ty:ident < T $(: $tbound1:ident $(+ $tbound2:ident)*)* $(, $typaram:ident : $bound:ident)* >) => {
+    ($ty:ident <T $(: $tbound1:ident $(+ $tbound2:ident)*)* $(, $typaram:ident : $bound:ident)*>) => {
         impl<T $(, $typaram)*> Serialize for $ty<T $(, $typaram)*>
         where
             T: Serialize $(+ $tbound1 $(+ $tbound2)*)*,
@@ -367,7 +367,7 @@ tuple_impls! {
 
 #[cfg(all(any(feature = "std", feature = "alloc"), not(no_relaxed_trait_bounds)))]
 macro_rules! map_impl {
-    ($ty:ident < K $(: $kbound1:ident $(+ $kbound2:ident)*)*, V $(, $typaram:ident : $bound:ident)* >) => {
+    ($ty:ident <K $(: $kbound1:ident $(+ $kbound2:ident)*)*, V $(, $typaram:ident : $bound:ident)*>) => {
         impl<K, V $(, $typaram)*> Serialize for $ty<K, V $(, $typaram)*>
         where
             K: Serialize,
@@ -386,7 +386,7 @@ macro_rules! map_impl {
 
 #[cfg(all(any(feature = "std", feature = "alloc"), no_relaxed_trait_bounds))]
 macro_rules! map_impl {
-    ($ty:ident < K $(: $kbound1:ident $(+ $kbound2:ident)*)*, V $(, $typaram:ident : $bound:ident)* >) => {
+    ($ty:ident <K $(: $kbound1:ident $(+ $kbound2:ident)*)*, V $(, $typaram:ident : $bound:ident)*>) => {
         impl<K, V $(, $typaram)*> Serialize for $ty<K, V $(, $typaram)*>
         where
             K: Serialize $(+ $kbound1 $(+ $kbound2)*)*,
@@ -502,7 +502,7 @@ where
 ////////////////////////////////////////////////////////////////////////////////
 
 macro_rules! nonzero_integers {
-    ( $( $T: ident, )+ ) => {
+    ($($T:ident,)+) => {
         $(
             #[cfg(not(no_num_nonzero))]
             impl Serialize for num::$T {
@@ -947,8 +947,9 @@ where
 
 #[cfg(all(feature = "std", not(no_std_atomic)))]
 macro_rules! atomic_impl {
-    ($($ty:ident)*) => {
+    ($($ty:ident $size:expr)*) => {
         $(
+            #[cfg(any(no_target_has_atomic, target_has_atomic = $size))]
             impl Serialize for $ty {
                 fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
                 where
@@ -964,12 +965,19 @@ macro_rules! atomic_impl {
 
 #[cfg(all(feature = "std", not(no_std_atomic)))]
 atomic_impl! {
-    AtomicBool
-    AtomicI8 AtomicI16 AtomicI32 AtomicIsize
-    AtomicU8 AtomicU16 AtomicU32 AtomicUsize
+    AtomicBool "8"
+    AtomicI8 "8"
+    AtomicI16 "16"
+    AtomicI32 "32"
+    AtomicIsize "ptr"
+    AtomicU8 "8"
+    AtomicU16 "16"
+    AtomicU32 "32"
+    AtomicUsize "ptr"
 }
 
 #[cfg(all(feature = "std", not(no_std_atomic64)))]
 atomic_impl! {
-    AtomicI64 AtomicU64
+    AtomicI64 "64"
+    AtomicU64 "64"
 }
