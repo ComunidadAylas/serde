@@ -141,12 +141,8 @@ pub struct Name {
     deserialize_aliases: Vec<String>,
 }
 
-#[allow(deprecated)]
 fn unraw(ident: &Ident) -> String {
-    // str::trim_start_matches was added in 1.30, trim_left_matches deprecated
-    // in 1.33. We currently support rustc back to 1.15 so we need to continue
-    // to use the deprecated one.
-    ident.to_string().trim_left_matches("r#").to_owned()
+    ident.to_string().trim_start_matches("r#").to_owned()
 }
 
 impl Name {
@@ -587,7 +583,7 @@ impl Container {
 
         let mut is_packed = false;
         for attr in &item.attrs {
-            if attr.path.is_ident("repr") {
+            if attr.path == REPR {
                 let _ = attr.parse_args_with(|input: ParseStream| {
                     while let Some(token) = input.parse()? {
                         if let TokenTree::Ident(ident) = token {
