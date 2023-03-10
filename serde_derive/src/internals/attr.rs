@@ -1,16 +1,16 @@
-use internals::respan::respan;
 use internals::symbol::*;
 use internals::{ungroup, Ctxt};
 use proc_macro2::{Spacing, Span, TokenStream, TokenTree};
 use quote::ToTokens;
 use std::borrow::Cow;
 use std::collections::BTreeSet;
+use std::iter::FromIterator;
 use syn;
-use syn::parse::{self, Parse, ParseStream};
+use syn::parse::ParseStream;
 use syn::punctuated::Punctuated;
-use syn::Ident;
 use syn::Meta::{List, NameValue, Path};
 use syn::NestedMeta::{Lit, Meta};
+use syn::{Ident, Lifetime};
 
 // This module handles parsing of `#[serde(...)]` attributes. The entrypoints
 // are `attr::Container::from_ast`, `attr::Variant::from_ast`, and
@@ -1604,7 +1604,7 @@ fn get_lit_str2<'a>(
 
 fn parse_lit_into_path(cx: &Ctxt, attr_name: Symbol, lit: &syn::Lit) -> Result<syn::Path, ()> {
     let string = get_lit_str(cx, attr_name, lit)?;
-    parse_lit_str(string).map_err(|_| {
+    string.parse().map_err(|_| {
         cx.error_spanned_by(lit, format!("failed to parse path: {:?}", string.value()));
     })
 }
@@ -1615,7 +1615,7 @@ fn parse_lit_into_expr_path(
     lit: &syn::Lit,
 ) -> Result<syn::ExprPath, ()> {
     let string = get_lit_str(cx, attr_name, lit)?;
-    parse_lit_str(string).map_err(|_| {
+    string.parse().map_err(|_| {
         cx.error_spanned_by(lit, format!("failed to parse path: {:?}", string.value()));
     })
 }
@@ -1627,21 +1627,17 @@ fn parse_lit_into_where(
     lit: &syn::Lit,
 ) -> Result<Vec<syn::WherePredicate>, ()> {
     let string = get_lit_str2(cx, attr_name, meta_item_name, lit)?;
-    if string.value().is_empty() {
-        return Ok(Vec::new());
-    }
 
-    let where_string = syn::LitStr::new(&format!("where {}", string.value()), string.span());
-
-    parse_lit_str::<syn::WhereClause>(&where_string)
-        .map(|wh| wh.predicates.into_iter().collect())
+    string
+        .parse_with(Punctuated::<syn::WherePredicate, Token![,]>::parse_terminated)
+        .map(Vec::from_iter)
         .map_err(|err| cx.error_spanned_by(lit, err))
 }
 
 fn parse_lit_into_ty(cx: &Ctxt, attr_name: Symbol, lit: &syn::Lit) -> Result<syn::Type, ()> {
     let string = get_lit_str(cx, attr_name, lit)?;
 
-    parse_lit_str(string).map_err(|_| {
+    string.parse().map_err(|_| {
         cx.error_spanned_by(
             lit,
             format!("failed to parse type: {} = {:?}", attr_name, string.value()),
@@ -1657,27 +1653,27 @@ fn parse_lit_into_lifetimes(
     lit: &syn::Lit,
 ) -> Result<BTreeSet<syn::Lifetime>, ()> {
     let string = get_lit_str(cx, attr_name, lit)?;
-    if string.value().is_empty() {
-        cx.error_spanned_by(lit, "at least one lifetime must be borrowed");
-        return Err(());
-    }
 
-    struct BorrowedLifetimes(Punctuated<syn::Lifetime, Token![+]>);
-
-    impl Parse for BorrowedLifetimes {
-        fn parse(input: ParseStream) -> parse::Result<Self> {
-            Punctuated::parse_separated_nonempty(input).map(BorrowedLifetimes)
-        }
-    }
-
-    if let Ok(BorrowedLifetimes(lifetimes)) = parse_lit_str(string) {
+    if let Ok(lifetimes) = string.parse_with(|input: ParseStream| {
         let mut set = BTreeSet::new();
-        for lifetime in lifetimes {
+        while !input.is_empty() {
+            let lifetime: Lifetime = input.parse()?;
             if !set.insert(lifetime.clone()) {
                 cx.error_spanned_by(lit, format!("duplicate borrowed lifetime `{}`", lifetime));
             }
+            if input.is_empty() {
+                break;
+            }
+            input.parse::<Token![+]>()?;
         }
-        return Ok(set);
+        Ok(set)
+    }) {
+        return if lifetimes.is_empty() {
+            cx.error_spanned_by(lit, "at least one lifetime must be borrowed");
+            Err(())
+        } else {
+            Ok(lifetimes)
+        };
     }
 
     cx.error_spanned_by(
@@ -1932,17 +1928,4 @@ fn collect_lifetimes_from_tokens(tokens: TokenStream, out: &mut BTreeSet<syn::Li
             _ => {}
         }
     }
-}
-
-fn parse_lit_str<T>(s: &syn::LitStr) -> parse::Result<T>
-where
-    T: Parse,
-{
-    let tokens = spanned_tokens(s)?;
-    syn::parse2(tokens)
-}
-
-fn spanned_tokens(s: &syn::LitStr) -> parse::Result<TokenStream> {
-    let stream = syn::parse_str(&s.value())?;
-    Ok(respan(stream, s.span()))
 }
