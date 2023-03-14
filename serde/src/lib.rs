@@ -93,7 +93,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 // Serde types in rustdoc of other crates get linked to here.
-#![doc(html_root_url = "https://docs.rs/serde/1.0.155")]
+#![doc(html_root_url = "https://docs.rs/serde/1.0.156")]
 // Support using Serde without the standard library!
 #![cfg_attr(not(feature = "std"), no_std)]
 // Unstable functionality only if the user asks for it. For tracking and
@@ -225,7 +225,7 @@ mod lib {
     pub use std::ffi::CStr;
 
     #[cfg(all(not(no_core_cstr), feature = "alloc", not(feature = "std")))]
-    pub use alloc::ffi::{CString};
+    pub use alloc::ffi::CString;
     #[cfg(feature = "std")]
     pub use std::ffi::CString;
 
@@ -338,9 +338,10 @@ mod std_error;
 #[allow(unused_imports)]
 #[macro_use]
 extern crate serde_derive;
+
+/// Derive macro available if serde is built with `features = ["derive"]`.
 #[cfg(feature = "serde_derive")]
-#[doc(hidden)]
-pub use serde_derive::*;
+pub use serde_derive::{Deserialize, Serialize};
 
 #[cfg(all(not(no_serde_derive), any(feature = "std", feature = "alloc")))]
 mod actually_private {
