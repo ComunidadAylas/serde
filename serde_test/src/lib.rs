@@ -140,7 +140,7 @@
 //! # }
 //! ```
 
-#![doc(html_root_url = "https://docs.rs/serde_test/1.0.160")]
+#![doc(html_root_url = "https://docs.rs/serde_test/1.0.161")]
 #![cfg_attr(feature = "cargo-clippy", allow(renamed_and_removed_lints))]
 // Ignored clippy lints
 #![cfg_attr(feature = "cargo-clippy", allow(float_cmp, needless_doctest_main))]
@@ -182,7 +182,3 @@ pub use assert::{
 pub use token::Token;
 
 pub use configure::{Compact, Configure, Readable};
-
-// Not public API.
-#[doc(hidden)]
-pub use de::Deserializer;
