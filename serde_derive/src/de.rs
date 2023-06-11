@@ -445,13 +445,18 @@ fn deserialize_tuple(
     cattrs: &attr::Container,
     deserializer: Option<TokenStream>,
 ) -> Fragment {
+    assert!(!cattrs.has_flatten());
+
+    let field_count = fields
+        .iter()
+        .filter(|field| !field.attrs.skip_deserializing())
+        .count();
+
     let this_type = &params.this_type;
     let this_value = &params.this_value;
     let (de_impl_generics, de_ty_generics, ty_generics, where_clause) =
         split_with_de_lifetime(params);
     let delife = params.borrowed.de_lifetime();
-
-    assert!(!cattrs.has_flatten());
 
     // If there are getters (implying private fields), construct the local type
     // and use an `Into` conversion to get the remote type. If there are no
@@ -493,19 +498,18 @@ fn deserialize_tuple(
         }
     };
     let dispatch = if let Some(deserializer) = deserializer {
-        quote!(_serde::Deserializer::deserialize_tuple(#deserializer, #nfields, #visitor_expr))
+        quote!(_serde::Deserializer::deserialize_tuple(#deserializer, #field_count, #visitor_expr))
     } else if is_enum {
-        quote!(_serde::de::VariantAccess::tuple_variant(__variant, #nfields, #visitor_expr))
+        quote!(_serde::de::VariantAccess::tuple_variant(__variant, #field_count, #visitor_expr))
     } else if nfields == 1 {
         let type_name = cattrs.name().deserialize_name();
         quote!(_serde::Deserializer::deserialize_newtype_struct(__deserializer, #type_name, #visitor_expr))
     } else {
         let type_name = cattrs.name().deserialize_name();
-        quote!(_serde::Deserializer::deserialize_tuple_struct(__deserializer, #type_name, #nfields, #visitor_expr))
+        quote!(_serde::Deserializer::deserialize_tuple_struct(__deserializer, #type_name, #field_count, #visitor_expr))
     };
 
-    let all_skipped = fields.iter().all(|field| field.attrs.skip_deserializing());
-    let visitor_var = if all_skipped {
+    let visitor_var = if field_count == 0 {
         quote!(_)
     } else {
         quote!(mut __seq)
@@ -548,12 +552,17 @@ fn deserialize_tuple_in_place(
     cattrs: &attr::Container,
     deserializer: Option<TokenStream>,
 ) -> Fragment {
+    assert!(!cattrs.has_flatten());
+
+    let field_count = fields
+        .iter()
+        .filter(|field| !field.attrs.skip_deserializing())
+        .count();
+
     let this_type = &params.this_type;
     let (de_impl_generics, de_ty_generics, ty_generics, where_clause) =
         split_with_de_lifetime(params);
     let delife = params.borrowed.de_lifetime();
-
-    assert!(!cattrs.has_flatten());
 
     let is_enum = variant_ident.is_some();
     let expecting = match variant_ident {
@@ -580,19 +589,18 @@ fn deserialize_tuple_in_place(
     };
 
     let dispatch = if let Some(deserializer) = deserializer {
-        quote!(_serde::Deserializer::deserialize_tuple(#deserializer, #nfields, #visitor_expr))
+        quote!(_serde::Deserializer::deserialize_tuple(#deserializer, #field_count, #visitor_expr))
     } else if is_enum {
-        quote!(_serde::de::VariantAccess::tuple_variant(__variant, #nfields, #visitor_expr))
+        quote!(_serde::de::VariantAccess::tuple_variant(__variant, #field_count, #visitor_expr))
     } else if nfields == 1 {
         let type_name = cattrs.name().deserialize_name();
         quote!(_serde::Deserializer::deserialize_newtype_struct(__deserializer, #type_name, #visitor_expr))
     } else {
         let type_name = cattrs.name().deserialize_name();
-        quote!(_serde::Deserializer::deserialize_tuple_struct(__deserializer, #type_name, #nfields, #visitor_expr))
+        quote!(_serde::Deserializer::deserialize_tuple_struct(__deserializer, #type_name, #field_count, #visitor_expr))
     };
 
-    let all_skipped = fields.iter().all(|field| field.attrs.skip_deserializing());
-    let visitor_var = if all_skipped {
+    let visitor_var = if field_count == 0 {
         quote!(_)
     } else {
         quote!(mut __seq)
@@ -1167,6 +1175,22 @@ fn deserialize_enum(
     variants: &[Variant],
     cattrs: &attr::Container,
 ) -> Fragment {
+    // The variants have already been checked (in ast.rs) that all untagged variants appear at the end
+    match variants.iter().position(|var| var.attrs.untagged()) {
+        Some(variant_idx) => {
+            let (tagged, untagged) = variants.split_at(variant_idx);
+            let tagged_frag = Expr(deserialize_homogeneous_enum(params, tagged, cattrs));
+            deserialize_untagged_enum_after(params, untagged, cattrs, Some(tagged_frag))
+        }
+        None => deserialize_homogeneous_enum(params, variants, cattrs),
+    }
+}
+
+fn deserialize_homogeneous_enum(
+    params: &Parameters,
+    variants: &[Variant],
+    cattrs: &attr::Container,
+) -> Fragment {
     match cattrs.tag() {
         attr::TagType::External => deserialize_externally_tagged_enum(params, variants, cattrs),
         attr::TagType::Internal { tag } => {
@@ -1667,6 +1691,16 @@ fn deserialize_untagged_enum(
     variants: &[Variant],
     cattrs: &attr::Container,
 ) -> Fragment {
+    let first_attempt = None;
+    deserialize_untagged_enum_after(params, variants, cattrs, first_attempt)
+}
+
+fn deserialize_untagged_enum_after(
+    params: &Parameters,
+    variants: &[Variant],
+    cattrs: &attr::Container,
+    first_attempt: Option<Expr>,
+) -> Fragment {
     let attempts = variants
         .iter()
         .filter(|variant| !variant.attrs.skip_deserializing())
@@ -1692,6 +1726,7 @@ fn deserialize_untagged_enum(
                 )
             }
         });
+    let attempts = first_attempt.into_iter().map(ToTokens::into_token_stream).chain(attempts);
     // TODO this message could be better by saving the errors from the failed
     // attempts. The heuristic used by TOML was to count the number of fields
     // processed before an error, and use the error that happened after the
@@ -1708,6 +1743,7 @@ fn deserialize_untagged_enum(
     quote_block! {
         let __content = try!(<_serde::__private::de::Content as _serde::Deserialize>::deserialize(__deserializer));
         let mut fallthrough_msg = ::std::string::ToString::to_string(#fallthrough_msg);
+        let __deserializer = _serde::__private::de::ContentRefDeserializer::<__D::Error>::new(&__content);
 
         #(
             match #attempts {
