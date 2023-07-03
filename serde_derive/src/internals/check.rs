@@ -110,9 +110,7 @@ fn check_flatten_field(cx: &Ctxt, style: Style, field: &Field) {
 fn check_identifier(cx: &Ctxt, cont: &Container) {
     let variants = match &cont.data {
         Data::Enum(variants) => variants,
-        Data::Struct(_, _) => {
-            return;
-        }
+        Data::Struct(_, _) => return,
     };
 
     for (i, variant) in variants.iter().enumerate() {
@@ -194,12 +192,10 @@ fn check_identifier(cx: &Ctxt, cont: &Container) {
 fn check_variant_skip_attrs(cx: &Ctxt, cont: &Container) {
     let variants = match &cont.data {
         Data::Enum(variants) => variants,
-        Data::Struct(_, _) => {
-            return;
-        }
+        Data::Struct(_, _) => return,
     };
 
-    for variant in variants.iter() {
+    for variant in variants {
         if variant.attrs.serialize_with().is_some() {
             if variant.attrs.skip_serializing() {
                 cx.error_spanned_by(
