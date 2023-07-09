@@ -474,7 +474,8 @@ mod content {
         where
             V: SeqAccess<'de>,
         {
-            let mut vec = Vec::with_capacity(size_hint::cautious(visitor.size_hint()));
+            let mut vec =
+                Vec::<Content>::with_capacity(size_hint::cautious::<Content>(visitor.size_hint()));
             while let Some(e) = try!(visitor.next_element()) {
                 vec.push(e);
             }
@@ -485,7 +486,10 @@ mod content {
         where
             V: MapAccess<'de>,
         {
-            let mut vec = Vec::with_capacity(size_hint::cautious(visitor.size_hint()));
+            let mut vec =
+                Vec::<(Content, Content)>::with_capacity(
+                    size_hint::cautious::<(Content, Content)>(visitor.size_hint()),
+                );
             while let Some(kv) = try!(visitor.next_entry()) {
                 vec.push(kv);
             }
@@ -797,19 +801,13 @@ mod content {
     /// Used by generated code to deserialize an internally tagged enum.
     ///
     /// Not public API.
-    pub struct TaggedContent<'de, T> {
-        pub tag: T,
-        pub content: Content<'de>,
-    }
-
-    /// Not public API.
-    pub struct TaggedContentVisitor<'de, T> {
+    pub struct TaggedContentVisitor<T> {
         tag_name: &'static str,
         expecting: &'static str,
-        value: PhantomData<TaggedContent<'de, T>>,
+        value: PhantomData<T>,
     }
 
-    impl<'de, T> TaggedContentVisitor<'de, T> {
+    impl<T> TaggedContentVisitor<T> {
         /// Visitor for the content of an internally tagged enum with the given
         /// tag name.
         pub fn new(name: &'static str, expecting: &'static str) -> Self {
@@ -821,27 +819,11 @@ mod content {
         }
     }
 
-    impl<'de, T> DeserializeSeed<'de> for TaggedContentVisitor<'de, T>
+    impl<'de, T> Visitor<'de> for TaggedContentVisitor<T>
     where
         T: Deserialize<'de>,
     {
-        type Value = TaggedContent<'de, T>;
-
-        fn deserialize<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
-        where
-            D: Deserializer<'de>,
-        {
-            // Internally tagged enums are only supported in self-describing
-            // formats.
-            deserializer.deserialize_any(self)
-        }
-    }
-
-    impl<'de, T> Visitor<'de> for TaggedContentVisitor<'de, T>
-    where
-        T: Deserialize<'de>,
-    {
-        type Value = TaggedContent<'de, T>;
+        type Value = (T, Content<'de>);
 
         fn expecting(&self, fmt: &mut fmt::Formatter) -> fmt::Result {
             fmt.write_str(self.expecting)
@@ -858,10 +840,7 @@ mod content {
                 }
             };
             let rest = de::value::SeqAccessDeserializer::new(seq);
-            Ok(TaggedContent {
-                tag,
-                content: try!(Content::deserialize(rest)),
-            })
+            Ok((tag, try!(Content::deserialize(rest))))
         }
 
         fn visit_map<M>(self, mut map: M) -> Result<Self::Value, M::Error>
@@ -869,7 +848,10 @@ mod content {
             M: MapAccess<'de>,
         {
             let mut tag = None;
-            let mut vec = Vec::with_capacity(size_hint::cautious(map.size_hint()));
+            let mut vec = Vec::<(Content, Content)>::with_capacity(size_hint::cautious::<(
+                Content,
+                Content,
+            )>(map.size_hint()));
             while let Some(k) = try!(map.next_key_seed(TagOrContentVisitor::new(self.tag_name))) {
                 match k {
                     TagOrContent::Tag => {
@@ -886,10 +868,7 @@ mod content {
             }
             match tag {
                 None => Err(de::Error::missing_field(self.tag_name)),
-                Some(tag) => Ok(TaggedContent {
-                    tag,
-                    content: Content::Map(vec),
-                }),
+                Some(tag) => Ok((tag, Content::Map(vec))),
             }
         }
     }
@@ -915,7 +894,7 @@ mod content {
         where
             D: Deserializer<'de>,
         {
-            deserializer.deserialize_str(self)
+            deserializer.deserialize_identifier(self)
         }
     }
 
@@ -924,6 +903,20 @@ mod content {
 
         fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
             write!(formatter, "{:?} or {:?}", self.tag, self.content)
+        }
+
+        fn visit_u64<E>(self, field_index: u64) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            match field_index {
+                0 => Ok(TagOrContentField::Tag),
+                1 => Ok(TagOrContentField::Content),
+                _ => Err(de::Error::invalid_value(
+                    Unexpected::Unsigned(field_index),
+                    &self,
+                )),
+            }
         }
 
         fn visit_str<E>(self, field: &str) -> Result<Self::Value, E>
@@ -936,6 +929,19 @@ mod content {
                 Ok(TagOrContentField::Content)
             } else {
                 Err(de::Error::invalid_value(Unexpected::Str(field), &self))
+            }
+        }
+
+        fn visit_bytes<E>(self, field: &[u8]) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            if field == self.tag.as_bytes() {
+                Ok(TagOrContentField::Tag)
+            } else if field == self.content.as_bytes() {
+                Ok(TagOrContentField::Content)
+            } else {
+                Err(de::Error::invalid_value(Unexpected::Bytes(field), &self))
             }
         }
     }
@@ -963,7 +969,7 @@ mod content {
         where
             D: Deserializer<'de>,
         {
-            deserializer.deserialize_str(self)
+            deserializer.deserialize_identifier(self)
         }
     }
 
@@ -976,6 +982,17 @@ mod content {
                 "{:?}, {:?}, or other ignored fields",
                 self.tag, self.content
             )
+        }
+
+        fn visit_u64<E>(self, field_index: u64) -> Result<Self::Value, E>
+        where
+            E: de::Error,
+        {
+            match field_index {
+                0 => Ok(TagContentOtherField::Tag),
+                1 => Ok(TagContentOtherField::Content),
+                _ => Ok(TagContentOtherField::Other),
+            }
         }
 
         fn visit_str<E>(self, field: &str) -> Result<Self::Value, E>
@@ -2822,6 +2839,13 @@ where
         visitor.visit_unit()
     }
 
+    fn deserialize_ignored_any<V>(self, visitor: V) -> Result<V::Value, Self::Error>
+    where
+        V: Visitor<'de>,
+    {
+        visitor.visit_unit()
+    }
+
     forward_to_deserialize_other! {
         deserialize_bool()
         deserialize_i8()
@@ -2844,7 +2868,6 @@ where
         deserialize_tuple(usize)
         deserialize_tuple_struct(&'static str, usize)
         deserialize_identifier()
-        deserialize_ignored_any()
     }
 }
 

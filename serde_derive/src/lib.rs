@@ -1,7 +1,7 @@
 //! This crate provides Serde's two derive macros.
 //!
-//! ```edition2018
-//! # use serde_derive::{Serialize, Deserialize};
+//! ```edition2021
+//! # use serde_derive::{Deserialize, Serialize};
 //! #
 //! #[derive(Serialize, Deserialize)]
 //! # struct S;
@@ -13,7 +13,7 @@
 //!
 //! [https://serde.rs/derive.html]: https://serde.rs/derive.html
 
-#![doc(html_root_url = "https://docs.rs/serde_derive/1.0.166")]
+#![doc(html_root_url = "https://docs.rs/serde_derive/1.0.169")]
 #![allow(unknown_lints, bare_trait_objects)]
 // Ignored clippy lints
 #![allow(

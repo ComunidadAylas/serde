@@ -93,7 +93,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 
 // Serde types in rustdoc of other crates get linked to here.
-#![doc(html_root_url = "https://docs.rs/serde/1.0.166")]
+#![doc(html_root_url = "https://docs.rs/serde/1.0.169")]
 // Support using Serde without the standard library!
 #![cfg_attr(not(feature = "std"), no_std)]
 // Unstable functionality only if the user asks for it. For tracking and
@@ -180,7 +180,7 @@ mod lib {
     pub use self::core::fmt::{self, Debug, Display};
     pub use self::core::marker::{self, PhantomData};
     pub use self::core::num::Wrapping;
-    pub use self::core::ops::Range;
+    pub use self::core::ops::{Range, RangeFrom, RangeTo};
     pub use self::core::option::{self, Option};
     pub use self::core::result::{self, Result};
 

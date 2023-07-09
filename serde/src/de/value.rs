@@ -1,10 +1,10 @@
 //! Building blocks for deserializing basic values using the `IntoDeserializer`
 //! trait.
 //!
-//! ```edition2018
+//! ```edition2021
+//! use serde::de::{value, Deserialize, IntoDeserializer};
+//! use serde_derive::Deserialize;
 //! use std::str::FromStr;
-//! use serde::Deserialize;
-//! use serde::de::{value, IntoDeserializer};
 //!
 //! #[derive(Deserialize)]
 //! enum Setting {
