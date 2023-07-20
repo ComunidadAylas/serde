@@ -10,8 +10,9 @@
     clippy::uninlined_format_args,
 )]
 
-use serde::de::{self, IgnoredAny, MapAccess, Unexpected, Visitor};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::de::{self, Deserialize, Deserializer, IgnoredAny, MapAccess, Unexpected, Visitor};
+use serde::ser::{Serialize, Serializer};
+use serde_derive::{Deserialize, Serialize};
 
 use std::collections::{BTreeMap, HashMap};
 use std::convert::TryFrom;
@@ -2965,7 +2966,9 @@ fn test_expecting_message() {
     #[derive(Deserialize)]
     #[serde(expecting = "something strange...")]
     struct Struct {
+        #[allow(dead_code)]
         question: String,
+        #[allow(dead_code)]
         answer: u32,
     }
 

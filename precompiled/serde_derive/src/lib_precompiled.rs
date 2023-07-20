@@ -1,5 +1,3 @@
-extern crate proc_macro;
-
 mod buffer;
 mod bytecode;
 
@@ -8,13 +6,8 @@ use crate::bytecode::Bytecode;
 use proc_macro::{Delimiter, Group, Ident, Literal, Punct, Spacing, Span, TokenStream, TokenTree};
 use std::io::{Read, Write};
 use std::iter::FromIterator;
-use std::process::{Command, Stdio};
+use std::process::{Command, ExitStatus, Stdio};
 use std::str::FromStr;
-
-#[cfg(not(all(target_arch = "x86_64", target_os = "linux", target_env = "gnu")))]
-compile_error! {
-    "this proof of concept is only compiled for x86_64-unknown-linux-gnu"
-}
 
 #[proc_macro_derive(Serialize, attributes(serde))]
 pub fn derive_serialize(input: TokenStream) -> TokenStream {
@@ -23,7 +16,7 @@ pub fn derive_serialize(input: TokenStream) -> TokenStream {
 
 #[proc_macro_derive(Deserialize, attributes(serde))]
 pub fn derive_deserialize(input: TokenStream) -> TokenStream {
-    derive(1, input)
+    derive(1 + cfg!(feature = "deserialize_in_place") as u8, input)
 }
 
 fn derive(select: u8, input: TokenStream) -> TokenStream {
@@ -36,7 +29,11 @@ fn derive(select: u8, input: TokenStream) -> TokenStream {
         memory.linearize_token(token, &mut buf);
     }
 
-    let mut child = Command::new(concat!(env!("CARGO_MANIFEST_DIR"), "/serde_derive"))
+    let path = concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/serde_derive-x86_64-unknown-linux-gnu",
+    );
+    let mut child = Command::new(path)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
@@ -50,6 +47,11 @@ fn derive(select: u8, input: TokenStream) -> TokenStream {
     let mut stdout = child.stdout.take().unwrap();
     buf.clear();
     stdout.read_to_end(&mut buf).unwrap();
+
+    let success = child.wait().as_ref().map_or(true, ExitStatus::success);
+    if !success || buf.is_empty() {
+        panic!();
+    }
 
     let mut buf = InputBuffer::new(&buf);
     memory.receive(&mut buf)

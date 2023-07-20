@@ -13,7 +13,7 @@
 //!
 //! [https://serde.rs/derive.html]: https://serde.rs/derive.html
 
-#![doc(html_root_url = "https://docs.rs/serde_derive/1.0.171")]
+#![doc(html_root_url = "https://docs.rs/serde_derive/1.0.173")]
 #![allow(unknown_lints, bare_trait_objects)]
 // Ignored clippy lints
 #![allow(
@@ -78,6 +78,8 @@ extern crate proc_macro2 as proc_macro;
 mod internals;
 
 use proc_macro::TokenStream;
+#[cfg(precompiled)]
+use std::sync::atomic::AtomicBool;
 use syn::DeriveInput;
 
 #[macro_use]
@@ -101,6 +103,9 @@ macro_rules! parse_macro_input {
         }
     };
 }
+
+#[cfg(precompiled)]
+pub static DESERIALIZE_IN_PLACE: AtomicBool = AtomicBool::new(false);
 
 #[cfg_attr(not(precompiled), proc_macro_derive(Serialize, attributes(serde)))]
 pub fn derive_serialize(input: TokenStream) -> TokenStream {
