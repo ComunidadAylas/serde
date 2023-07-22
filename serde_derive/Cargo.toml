@@ -1,6 +1,6 @@
 [package]
 name = "serde_derive"
-version = "1.0.173" # remember to update html_root_url
+version = "1.0.174" # remember to update html_root_url
 authors = ["Erick Tryzelaar <erick.tryzelaar@gmail.com>", "David Tolnay <dtolnay@gmail.com>"]
 categories = ["no-std", "no-std::no-alloc"]
 description = "Macros 1.1 implementation of #[derive(Serialize, Deserialize)]"
@@ -30,3 +30,4 @@ serde = { version = "1", path = "../serde" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
+rustdoc-args = ["--generate-link-to-definition"]

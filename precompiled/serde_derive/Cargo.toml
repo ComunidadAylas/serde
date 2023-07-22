@@ -1,6 +1,6 @@
 [package]
 name = "serde_derive"
-version = "1.0.173"
+version = "1.0.174"
 authors = ["David Tolnay <dtolnay@gmail.com>"]
 categories = ["no-std", "no-std::no-alloc"]
 description = "Implementation of #[derive(Serialize, Deserialize)]"
@@ -31,5 +31,6 @@ serde = { version = "1", path = "../../serde" }
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
+rustdoc-args = ["--generate-link-to-definition"]
 
 [workspace]
