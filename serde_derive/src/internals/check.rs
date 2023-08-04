@@ -1,6 +1,6 @@
-use internals::ast::{Container, Data, Field, Style};
-use internals::attr::{Identifier, TagType};
-use internals::{ungroup, Ctxt, Derive};
+use crate::internals::ast::{Container, Data, Field, Style};
+use crate::internals::attr::{Identifier, TagType};
+use crate::internals::{ungroup, Ctxt, Derive};
 use syn::{Member, Type};
 
 // Cross-cutting checks that require looking at more than a single attrs object.
@@ -285,8 +285,10 @@ fn check_internal_tag_field_name_conflict(cx: &Ctxt, cont: &Container) {
         match variant.style {
             Style::Struct => {
                 for field in &variant.fields {
-                    let check_ser = !field.attrs.skip_serializing();
-                    let check_de = !field.attrs.skip_deserializing();
+                    let check_ser =
+                        !(field.attrs.skip_serializing() || variant.attrs.skip_serializing());
+                    let check_de =
+                        !(field.attrs.skip_deserializing() || variant.attrs.skip_deserializing());
                     let name = field.attrs.name();
                     let ser_name = name.serialize_name();
 

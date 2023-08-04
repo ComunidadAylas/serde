@@ -12,7 +12,6 @@ use serde_derive::{Deserialize, Serialize};
 use serde_test::{
     assert_de_tokens, assert_de_tokens_error, assert_ser_tokens, assert_tokens, Token,
 };
-
 use std::collections::BTreeMap;
 use std::marker::PhantomData;
 
@@ -473,7 +472,10 @@ fn test_adjacently_tagged_newtype_struct() {
             },
             Token::U32(5),
             Token::Str("t"),
-            Token::Str("Newtype"),
+            Token::UnitVariant {
+                name: "E",
+                variant: "Newtype",
+            },
             Token::StructEnd,
         ],
     );
@@ -1079,7 +1081,10 @@ fn test_adjacently_tagged_enum() {
                 len: 1,
             },
             Token::Str("t"),
-            Token::Str("Unit"),
+            Token::UnitVariant {
+                name: "AdjacentlyTagged",
+                variant: "Unit",
+            },
             Token::StructEnd,
         ],
     );
@@ -1093,7 +1098,10 @@ fn test_adjacently_tagged_enum() {
                 len: 2,
             },
             Token::Str("t"),
-            Token::Str("Unit"),
+            Token::UnitVariant {
+                name: "AdjacentlyTagged",
+                variant: "Unit",
+            },
             Token::StructEnd,
         ],
     );
@@ -1107,7 +1115,10 @@ fn test_adjacently_tagged_enum() {
                 len: 2,
             },
             Token::Str("t"),
-            Token::Str("Unit"),
+            Token::UnitVariant {
+                name: "AdjacentlyTagged",
+                variant: "Unit",
+            },
             Token::Str("c"),
             Token::Unit,
             Token::StructEnd,
@@ -1125,7 +1136,10 @@ fn test_adjacently_tagged_enum() {
             Token::Str("c"),
             Token::Unit,
             Token::Str("t"),
-            Token::Str("Unit"),
+            Token::UnitVariant {
+                name: "AdjacentlyTagged",
+                variant: "Unit",
+            },
             Token::StructEnd,
         ],
     );
@@ -1141,7 +1155,10 @@ fn test_adjacently_tagged_enum() {
             Token::Str("f"),
             Token::Unit,
             Token::Str("t"),
-            Token::Str("Unit"),
+            Token::UnitVariant {
+                name: "AdjacentlyTagged",
+                variant: "Unit",
+            },
             Token::Str("g"),
             Token::Unit,
             Token::Str("c"),
@@ -1161,7 +1178,10 @@ fn test_adjacently_tagged_enum() {
                 len: 2,
             },
             Token::Str("t"),
-            Token::Str("Newtype"),
+            Token::UnitVariant {
+                name: "AdjacentlyTagged",
+                variant: "Newtype",
+            },
             Token::Str("c"),
             Token::U8(1),
             Token::StructEnd,
@@ -1179,7 +1199,10 @@ fn test_adjacently_tagged_enum() {
             Token::Str("c"),
             Token::U8(1),
             Token::Str("t"),
-            Token::Str("Newtype"),
+            Token::UnitVariant {
+                name: "AdjacentlyTagged",
+                variant: "Newtype",
+            },
             Token::StructEnd,
         ],
     );
@@ -1193,7 +1216,10 @@ fn test_adjacently_tagged_enum() {
                 len: 1,
             },
             Token::Str("t"),
-            Token::Str("Newtype"),
+            Token::UnitVariant {
+                name: "AdjacentlyTagged",
+                variant: "Newtype",
+            },
             Token::StructEnd,
         ],
     );
@@ -1207,7 +1233,10 @@ fn test_adjacently_tagged_enum() {
                 len: 2,
             },
             Token::Str("t"),
-            Token::Str("Tuple"),
+            Token::UnitVariant {
+                name: "AdjacentlyTagged",
+                variant: "Tuple",
+            },
             Token::Str("c"),
             Token::Tuple { len: 2 },
             Token::U8(1),
@@ -1231,7 +1260,10 @@ fn test_adjacently_tagged_enum() {
             Token::U8(1),
             Token::TupleEnd,
             Token::Str("t"),
-            Token::Str("Tuple"),
+            Token::UnitVariant {
+                name: "AdjacentlyTagged",
+                variant: "Tuple",
+            },
             Token::StructEnd,
         ],
     );
@@ -1245,7 +1277,10 @@ fn test_adjacently_tagged_enum() {
                 len: 2,
             },
             Token::Str("t"),
-            Token::Str("Struct"),
+            Token::UnitVariant {
+                name: "AdjacentlyTagged",
+                variant: "Struct",
+            },
             Token::Str("c"),
             Token::Struct {
                 name: "Struct",
@@ -1275,7 +1310,10 @@ fn test_adjacently_tagged_enum() {
             Token::U8(1),
             Token::StructEnd,
             Token::Str("t"),
-            Token::Str("Struct"),
+            Token::UnitVariant {
+                name: "AdjacentlyTagged",
+                variant: "Struct",
+            },
             Token::StructEnd,
         ],
     );
@@ -1291,7 +1329,10 @@ fn test_adjacently_tagged_enum() {
             Token::U64(1), // content field
             Token::U8(1),
             Token::U64(0), // tag field
-            Token::Str("Newtype"),
+            Token::UnitVariant {
+                name: "AdjacentlyTagged",
+                variant: "Newtype",
+            },
             Token::StructEnd,
         ],
     );
@@ -1307,7 +1348,10 @@ fn test_adjacently_tagged_enum() {
             Token::Bytes(b"c"),
             Token::U8(1),
             Token::Bytes(b"t"),
-            Token::Str("Newtype"),
+            Token::UnitVariant {
+                name: "AdjacentlyTagged",
+                variant: "Newtype",
+            },
             Token::StructEnd,
         ],
     );
@@ -1329,7 +1373,10 @@ fn test_adjacently_tagged_enum_deny_unknown_fields() {
                 len: 2,
             },
             Token::Str("t"),
-            Token::Str("Unit"),
+            Token::UnitVariant {
+                name: "AdjacentlyTagged",
+                variant: "Unit",
+            },
             Token::Str("c"),
             Token::Unit,
             Token::StructEnd,
@@ -1343,7 +1390,10 @@ fn test_adjacently_tagged_enum_deny_unknown_fields() {
                 len: 2,
             },
             Token::Str("t"),
-            Token::Str("Unit"),
+            Token::UnitVariant {
+                name: "AdjacentlyTagged",
+                variant: "Unit",
+            },
             Token::Str("c"),
             Token::Unit,
             Token::Str("h"),
@@ -1382,7 +1432,10 @@ fn test_adjacently_tagged_enum_deny_unknown_fields() {
                 len: 2,
             },
             Token::U64(0), // tag field
-            Token::Str("Unit"),
+            Token::UnitVariant {
+                name: "AdjacentlyTagged",
+                variant: "Unit",
+            },
             Token::U64(3),
         ],
         r#"invalid value: integer `3`, expected "t" or "c""#,
@@ -1442,6 +1495,9 @@ fn test_enum_in_internally_tagged_enum() {
         ],
     );
 
+    // Reaches crate::private::de::content::VariantDeserializer::tuple_variant
+    // Content::Seq case
+    // via ContentDeserializer::deserialize_enum
     assert_tokens(
         &Outer::Inner(Inner::Tuple(1, 1)),
         &[
@@ -1460,6 +1516,9 @@ fn test_enum_in_internally_tagged_enum() {
         ],
     );
 
+    // Reaches crate::private::de::content::VariantDeserializer::struct_variant
+    // Content::Map case
+    // via ContentDeserializer::deserialize_enum
     assert_tokens(
         &Outer::Inner(Inner::Struct { f: 1 }),
         &[
@@ -1474,6 +1533,23 @@ fn test_enum_in_internally_tagged_enum() {
             Token::Str("f"),
             Token::U8(1),
             Token::StructEnd,
+            Token::MapEnd,
+        ],
+    );
+
+    // Reaches crate::private::de::content::VariantDeserializer::struct_variant
+    // Content::Seq case
+    // via ContentDeserializer::deserialize_enum
+    assert_de_tokens(
+        &Outer::Inner(Inner::Struct { f: 1 }),
+        &[
+            Token::Map { len: Some(2) },
+            Token::Str("type"),
+            Token::Str("Inner"),
+            Token::Str("Struct"),
+            Token::Seq { len: Some(1) },
+            Token::U8(1), // f
+            Token::SeqEnd,
             Token::MapEnd,
         ],
     );
@@ -1555,7 +1631,10 @@ fn test_internally_tagged_struct_with_flattened_field() {
             Token::Str("tag_struct"),
             Token::Str("Struct"),
             Token::Str("tag_enum"),
-            Token::Str("A"),
+            Token::UnitVariant {
+                name: "Enum",
+                variant: "A",
+            },
             Token::Str("content"),
             Token::U64(0),
             Token::MapEnd,
@@ -1932,6 +2011,62 @@ fn test_rename_all() {
             Token::Str("SERIALIZE-SEQ"),
             Token::Bool(true),
             Token::StructEnd,
+        ],
+    );
+}
+
+#[test]
+fn test_rename_all_fields() {
+    #[derive(Serialize, Deserialize, Debug, PartialEq)]
+    #[serde(rename_all_fields = "kebab-case")]
+    enum E {
+        V1,
+        V2(bool),
+        V3 {
+            a_field: bool,
+            another_field: bool,
+            #[serde(rename = "last-field")]
+            yet_another_field: bool,
+        },
+        #[serde(rename_all = "snake_case")]
+        V4 {
+            a_field: bool,
+        },
+    }
+
+    assert_tokens(
+        &E::V3 {
+            a_field: true,
+            another_field: true,
+            yet_another_field: true,
+        },
+        &[
+            Token::StructVariant {
+                name: "E",
+                variant: "V3",
+                len: 3,
+            },
+            Token::Str("a-field"),
+            Token::Bool(true),
+            Token::Str("another-field"),
+            Token::Bool(true),
+            Token::Str("last-field"),
+            Token::Bool(true),
+            Token::StructVariantEnd,
+        ],
+    );
+
+    assert_tokens(
+        &E::V4 { a_field: true },
+        &[
+            Token::StructVariant {
+                name: "E",
+                variant: "V4",
+                len: 1,
+            },
+            Token::Str("a_field"),
+            Token::Bool(true),
+            Token::StructVariantEnd,
         ],
     );
 }

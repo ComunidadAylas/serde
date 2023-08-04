@@ -1,15 +1,14 @@
-use internals::symbol::*;
-use internals::{ungroup, Ctxt};
+use crate::internals::symbol::*;
+use crate::internals::{ungroup, Ctxt};
 use proc_macro2::{Spacing, Span, TokenStream, TokenTree};
 use quote::ToTokens;
 use std::borrow::Cow;
 use std::collections::BTreeSet;
 use std::iter::FromIterator;
-use syn;
 use syn::meta::ParseNestedMeta;
 use syn::parse::ParseStream;
 use syn::punctuated::Punctuated;
-use syn::{token, Ident, Lifetime};
+use syn::{parse_quote, token, Ident, Lifetime, Token};
 
 // This module handles parsing of `#[serde(...)]` attributes. The entrypoints
 // are `attr::Container::from_ast`, `attr::Variant::from_ast`, and
@@ -19,7 +18,7 @@ use syn::{token, Ident, Lifetime};
 // user will see errors simultaneously for all bad attributes in the crate
 // rather than just the first.
 
-pub use internals::case::RenameRule;
+pub use crate::internals::case::RenameRule;
 
 struct Attr<'c, T> {
     cx: &'c Ctxt,
@@ -193,9 +192,21 @@ impl Name {
     }
 }
 
+#[derive(Copy, Clone)]
 pub struct RenameAllRules {
     serialize: RenameRule,
     deserialize: RenameRule,
+}
+
+impl RenameAllRules {
+    /// Returns a new `RenameAllRules` with the individual rules of `self` and
+    /// `other_rules` joined by `RenameRules::or`.
+    pub fn or(self, other_rules: Self) -> Self {
+        Self {
+            serialize: self.serialize.or(other_rules.serialize),
+            deserialize: self.deserialize.or(other_rules.deserialize),
+        }
+    }
 }
 
 /// Represents struct or enum attribute information.
@@ -205,6 +216,7 @@ pub struct Container {
     deny_unknown_fields: bool,
     default: Default,
     rename_all_rules: RenameAllRules,
+    rename_all_fields_rules: RenameAllRules,
     ser_bound: Option<Vec<syn::WherePredicate>>,
     de_bound: Option<Vec<syn::WherePredicate>>,
     tag: TagType,
@@ -288,6 +300,8 @@ impl Container {
         let mut default = Attr::none(cx, DEFAULT);
         let mut rename_all_ser_rule = Attr::none(cx, RENAME_ALL);
         let mut rename_all_de_rule = Attr::none(cx, RENAME_ALL);
+        let mut rename_all_fields_ser_rule = Attr::none(cx, RENAME_ALL_FIELDS);
+        let mut rename_all_fields_de_rule = Attr::none(cx, RENAME_ALL_FIELDS);
         let mut ser_bound = Attr::none(cx, BOUND);
         let mut de_bound = Attr::none(cx, BOUND);
         let mut untagged = BoolAttr::none(cx, UNTAGGED);
@@ -341,6 +355,44 @@ impl Container {
                             }
                         }
                     }
+                } else if meta.path == RENAME_ALL_FIELDS {
+                    // #[serde(rename_all_fields = "foo")]
+                    // #[serde(rename_all_fields(serialize = "foo", deserialize = "bar"))]
+                    let one_name = meta.input.peek(Token![=]);
+                    let (ser, de) = get_renames(cx, RENAME_ALL_FIELDS, &meta)?;
+
+                    match item.data {
+                        syn::Data::Enum(_) => {
+                            if let Some(ser) = ser {
+                                match RenameRule::from_str(&ser.value()) {
+                                    Ok(rename_rule) => {
+                                        rename_all_fields_ser_rule.set(&meta.path, rename_rule);
+                                    }
+                                    Err(err) => cx.error_spanned_by(ser, err),
+                                }
+                            }
+                            if let Some(de) = de {
+                                match RenameRule::from_str(&de.value()) {
+                                    Ok(rename_rule) => {
+                                        rename_all_fields_de_rule.set(&meta.path, rename_rule);
+                                    }
+                                    Err(err) => {
+                                        if !one_name {
+                                            cx.error_spanned_by(de, err);
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        syn::Data::Struct(_) => {
+                            let msg = "#[serde(rename_all_fields)] can only be used on enums";
+                            cx.syn_error(meta.error(msg));
+                        }
+                        syn::Data::Union(_) => {
+                            let msg = "#[serde(rename_all_fields)] can only be used on enums";
+                            cx.syn_error(meta.error(msg));
+                        }
+                    }
                 } else if meta.path == TRANSPARENT {
                     // #[serde(transparent)]
                     transparent.set_true(meta.path);
@@ -358,16 +410,16 @@ impl Container {
                                     }
                                     syn::Fields::Unnamed(_) | syn::Fields::Unit => {
                                         let msg = "#[serde(default = \"...\")] can only be used on structs with named fields";
-                                        cx.error_spanned_by(fields, msg);
+                                        cx.syn_error(meta.error(msg));
                                     }
                                 },
-                                syn::Data::Enum(syn::DataEnum { enum_token, .. }) => {
+                                syn::Data::Enum(_) => {
                                     let msg = "#[serde(default = \"...\")] can only be used on structs with named fields";
-                                    cx.error_spanned_by(enum_token, msg);
+                                    cx.syn_error(meta.error(msg));
                                 }
-                                syn::Data::Union(syn::DataUnion { union_token, .. }) => {
+                                syn::Data::Union(_) => {
                                     let msg = "#[serde(default = \"...\")] can only be used on structs with named fields";
-                                    cx.error_spanned_by(union_token, msg);
+                                    cx.syn_error(meta.error(msg));
                                 }
                             }
                         }
@@ -383,13 +435,13 @@ impl Container {
                                     cx.error_spanned_by(fields, msg);
                                 }
                             },
-                            syn::Data::Enum(syn::DataEnum { enum_token, .. }) => {
+                            syn::Data::Enum(_) => {
                                 let msg = "#[serde(default)] can only be used on structs with named fields";
-                                cx.error_spanned_by(enum_token, msg);
+                                cx.syn_error(meta.error(msg));
                             }
-                            syn::Data::Union(syn::DataUnion { union_token, .. }) => {
+                            syn::Data::Union(_) => {
                                 let msg = "#[serde(default)] can only be used on structs with named fields";
-                                cx.error_spanned_by(union_token, msg);
+                                cx.syn_error(meta.error(msg));
                             }
                         }
                     }
@@ -405,13 +457,13 @@ impl Container {
                         syn::Data::Enum(_) => {
                             untagged.set_true(&meta.path);
                         }
-                        syn::Data::Struct(syn::DataStruct { struct_token, .. }) => {
+                        syn::Data::Struct(_) => {
                             let msg = "#[serde(untagged)] can only be used on enums";
-                            cx.error_spanned_by(struct_token, msg);
+                            cx.syn_error(meta.error(msg));
                         }
-                        syn::Data::Union(syn::DataUnion { union_token, .. }) => {
+                        syn::Data::Union(_) => {
                             let msg = "#[serde(untagged)] can only be used on enums";
-                            cx.error_spanned_by(union_token, msg);
+                            cx.syn_error(meta.error(msg));
                         }
                     }
                 } else if meta.path == TAG {
@@ -427,12 +479,12 @@ impl Container {
                                 }
                                 syn::Fields::Unnamed(_) | syn::Fields::Unit => {
                                     let msg = "#[serde(tag = \"...\")] can only be used on enums and structs with named fields";
-                                    cx.error_spanned_by(fields, msg);
+                                    cx.syn_error(meta.error(msg));
                                 }
                             },
-                            syn::Data::Union(syn::DataUnion { union_token, .. }) => {
+                            syn::Data::Union(_) => {
                                 let msg = "#[serde(tag = \"...\")] can only be used on enums and structs with named fields";
-                                cx.error_spanned_by(union_token, msg);
+                                cx.syn_error(meta.error(msg));
                             }
                         }
                     }
@@ -443,13 +495,13 @@ impl Container {
                             syn::Data::Enum(_) => {
                                 content.set(&meta.path, s.value());
                             }
-                            syn::Data::Struct(syn::DataStruct { struct_token, .. }) => {
+                            syn::Data::Struct(_) => {
                                 let msg = "#[serde(content = \"...\")] can only be used on enums";
-                                cx.error_spanned_by(struct_token, msg);
+                                cx.syn_error(meta.error(msg));
                             }
-                            syn::Data::Union(syn::DataUnion { union_token, .. }) => {
+                            syn::Data::Union(_) => {
                                 let msg = "#[serde(content = \"...\")] can only be used on enums";
-                                cx.error_spanned_by(union_token, msg);
+                                cx.syn_error(meta.error(msg));
                             }
                         }
                     }
@@ -528,6 +580,10 @@ impl Container {
                 serialize: rename_all_ser_rule.get().unwrap_or(RenameRule::None),
                 deserialize: rename_all_de_rule.get().unwrap_or(RenameRule::None),
             },
+            rename_all_fields_rules: RenameAllRules {
+                serialize: rename_all_fields_ser_rule.get().unwrap_or(RenameRule::None),
+                deserialize: rename_all_fields_de_rule.get().unwrap_or(RenameRule::None),
+            },
             ser_bound: ser_bound.get(),
             de_bound: de_bound.get(),
             tag: decide_tag(cx, item, untagged, internal_tag, content),
@@ -547,8 +603,12 @@ impl Container {
         &self.name
     }
 
-    pub fn rename_all_rules(&self) -> &RenameAllRules {
-        &self.rename_all_rules
+    pub fn rename_all_rules(&self) -> RenameAllRules {
+        self.rename_all_rules
+    }
+
+    pub fn rename_all_fields_rules(&self) -> RenameAllRules {
+        self.rename_all_fields_rules
     }
 
     pub fn transparent(&self) -> bool {
@@ -921,7 +981,7 @@ impl Variant {
         self.name.deserialize_aliases()
     }
 
-    pub fn rename_by_rules(&mut self, rules: &RenameAllRules) {
+    pub fn rename_by_rules(&mut self, rules: RenameAllRules) {
         if !self.name.serialize_renamed {
             self.name.serialize = rules.serialize.apply_to_variant(&self.name.serialize);
         }
@@ -930,8 +990,8 @@ impl Variant {
         }
     }
 
-    pub fn rename_all_rules(&self) -> &RenameAllRules {
-        &self.rename_all_rules
+    pub fn rename_all_rules(&self) -> RenameAllRules {
+        self.rename_all_rules
     }
 
     pub fn ser_bound(&self) -> Option<&[syn::WherePredicate]> {
@@ -1260,7 +1320,7 @@ impl Field {
         self.name.deserialize_aliases()
     }
 
-    pub fn rename_by_rules(&mut self, rules: &RenameAllRules) {
+    pub fn rename_by_rules(&mut self, rules: RenameAllRules) {
         if !self.name.serialize_renamed {
             self.name.serialize = rules.serialize.apply_to_field(&self.name.serialize);
         }
