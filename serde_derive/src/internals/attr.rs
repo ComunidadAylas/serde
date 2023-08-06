@@ -134,7 +134,7 @@ pub struct Name {
     serialize_renamed: bool,
     deserialize: String,
     deserialize_renamed: bool,
-    deserialize_aliases: Vec<String>,
+    deserialize_aliases: BTreeSet<String>,
 }
 
 fn unraw(ident: &Ident) -> String {
@@ -148,16 +148,12 @@ impl Name {
         de_name: Attr<String>,
         de_aliases: Option<VecAttr<String>>,
     ) -> Name {
-        let deserialize_aliases = match de_aliases {
-            Some(de_aliases) => {
-                let mut alias_list = BTreeSet::new();
-                for alias_name in de_aliases.get() {
-                    alias_list.insert(alias_name);
-                }
-                alias_list.into_iter().collect()
+        let mut alias_set = BTreeSet::new();
+        if let Some(de_aliases) = de_aliases {
+            for alias_name in de_aliases.get() {
+                alias_set.insert(alias_name);
             }
-            None => Vec::new(),
-        };
+        }
 
         let ser_name = ser_name.get();
         let ser_renamed = ser_name.is_some();
@@ -168,27 +164,22 @@ impl Name {
             serialize_renamed: ser_renamed,
             deserialize: de_name.unwrap_or(source_name),
             deserialize_renamed: de_renamed,
-            deserialize_aliases,
+            deserialize_aliases: alias_set,
         }
     }
 
     /// Return the container name for the container when serializing.
-    pub fn serialize_name(&self) -> String {
-        self.serialize.clone()
+    pub fn serialize_name(&self) -> &str {
+        &self.serialize
     }
 
     /// Return the container name for the container when deserializing.
-    pub fn deserialize_name(&self) -> String {
-        self.deserialize.clone()
+    pub fn deserialize_name(&self) -> &str {
+        &self.deserialize
     }
 
-    fn deserialize_aliases(&self) -> Vec<String> {
-        let mut aliases = self.deserialize_aliases.clone();
-        let main_name = self.deserialize_name();
-        if !aliases.contains(&main_name) {
-            aliases.push(main_name);
-        }
-        aliases
+    fn deserialize_aliases(&self) -> &BTreeSet<String> {
+        &self.deserialize_aliases
     }
 }
 
@@ -977,7 +968,7 @@ impl Variant {
         &self.name
     }
 
-    pub fn aliases(&self) -> Vec<String> {
+    pub fn aliases(&self) -> &BTreeSet<String> {
         self.name.deserialize_aliases()
     }
 
@@ -988,6 +979,9 @@ impl Variant {
         if !self.name.deserialize_renamed {
             self.name.deserialize = rules.deserialize.apply_to_variant(&self.name.deserialize);
         }
+        self.name
+            .deserialize_aliases
+            .insert(self.name.deserialize.clone());
     }
 
     pub fn rename_all_rules(&self) -> RenameAllRules {
@@ -1316,7 +1310,7 @@ impl Field {
         &self.name
     }
 
-    pub fn aliases(&self) -> Vec<String> {
+    pub fn aliases(&self) -> &BTreeSet<String> {
         self.name.deserialize_aliases()
     }
 
@@ -1327,6 +1321,9 @@ impl Field {
         if !self.name.deserialize_renamed {
             self.name.deserialize = rules.deserialize.apply_to_field(&self.name.deserialize);
         }
+        self.name
+            .deserialize_aliases
+            .insert(self.name.deserialize.clone());
     }
 
     pub fn skip_serializing(&self) -> bool {
