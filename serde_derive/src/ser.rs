@@ -409,9 +409,9 @@ fn serialize_enum(params: &Parameters, variants: &[Variant], cattrs: &attr::Cont
         })
         .collect();
 
-    if cattrs.non_exhaustive() {
+    if cattrs.remote().is_some() && cattrs.non_exhaustive() {
         arms.push(quote! {
-            unrecognized => _serde::__private::Err(_serde::ser::Error::custom(_serde::__private::ser::CannotSerializeVariant(unrecognized))),
+            ref unrecognized => _serde::__private::Err(_serde::ser::Error::custom(_serde::__private::ser::CannotSerializeVariant(unrecognized))),
         });
     }
 
@@ -710,7 +710,7 @@ fn serialize_adjacently_tagged_variant(
     });
 
     let fields_ty = variant.fields.iter().map(|f| &f.ty);
-    let fields_ident: &Vec<_> = &match variant.style {
+    let fields_ident: &[_] = &match variant.style {
         Style::Unit => {
             if variant.attrs.serialize_with().is_some() {
                 vec![]
